@@ -148,4 +148,24 @@ To force a fresh model download, bump the trailing version in the cache key
   `HF_HUB_OFFLINE=1` at runtime.
 - **Never change the model without reindexing.** Vectors from two different
   models are not comparable, so a model swap invalidates every stored embedding.
+
+## License
+
+Copyright (C) 2026 Kushal Banik.
+
+Released under the [GNU General Public License v3.0 or later](LICENSE).
+
+GPL-3.0 is a copyleft license: anyone who distributes this service, or a
+derivative of it, must release their source under the GPL as well. Two
+consequences worth knowing before you build on this:
+
+- **Running it as a hosted service is not "distribution."** Someone can host a
+  modified version and offer it over HTTP without publishing their changes.
+  [AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0.html) is the variant that
+  closes that gap, if a network service is what you are protecting.
+- **It constrains who can adopt it.** Most companies will not link GPL code into
+  a closed-source product, so this rules out that kind of reuse by design.
+
+Switching later is possible while you are the sole copyright holder, but gets
+much harder once other people have contributed.
 "# Sementic-Search-Engine" 
