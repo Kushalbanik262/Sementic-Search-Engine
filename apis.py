@@ -29,6 +29,9 @@ logger = logging.getLogger("embeddings.api")
 # than fighting each other for cores.
 _encode_limiter = CapacityLimiter(get_settings().max_concurrent_encodes)
 
+_tasks_run = 0
+_total_time_to_process_till_now = 0.0
+
 
 # --- schemas ---------------------------------------------------------------
 
@@ -106,6 +109,15 @@ class HealthResponse(BaseModel):
     # an `int | None` field with no default is still required.
     pending_jobs: int | None = None
 
+
+
+class EngineResponse(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+    engine_status : str
+    models_supported : list[str]
+    total_processed_tasks : int
+    average_time_to_process : float
+    device: str | None
 
 # --- dependencies ----------------------------------------------------------
 
@@ -227,6 +239,19 @@ def health_ready() -> HealthResponse:
     )
 
 
+@app.get("/health/engine",response_model=EngineResponse,tags=["meta"])
+def engine_health() -> EngineResponse:
+    """Engine Health Check"""
+    device = get_settings().device
+    return EngineResponse(
+        engine_status= "RUNNING" if engine.is_ready  else "NOT_RUNNING",
+        total_processed_tasks=_tasks_run,
+        models_supported=["BAAI/bge-small-en-v1.5"],
+        average_time_to_process= (_total_time_to_process_till_now / max(_tasks_run,1)),
+        device=device
+    )
+
+
 @app.post(
     "/v1/embeddings",
     response_model=EmbeddingResponse,
@@ -261,7 +286,11 @@ async def create_embeddings(
         ) from None
 
     try:
+        global _tasks_run
+        global _total_time_to_process_till_now
+        _tasks_run += 1
         result: EncodeResult = await to_thread.run_sync(work)
+        _total_time_to_process_till_now += result.took_ms
     finally:
         _encode_limiter.release()
 

@@ -1,0 +1,89 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A newer push to the same branch makes an in-flight run pointless.
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: pytest (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # Add "3.13" here to check a second interpreter. Each entry is a full
+        # extra job, including its own torch install, so it roughly doubles
+        # the wall clock.
+        python-version: ["3.14"]
+
+    env:
+      MODEL_NAME: BAAI/bge-small-en-v1.5
+      HF_HUB_DISABLE_TELEMETRY: "1"
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      # Must run BEFORE requirements-dev.txt, which asks for a bare `torch`.
+      # PyPI's default Linux wheel drags in ~2.5 GB of CUDA libraries that a
+      # runner with no GPU will never use. The CPU index serves a far smaller
+      # build of the same version, and pip then treats the requirement as met.
+      - name: Install CPU-only torch
+        run: pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Report the installed torch build
+        run: python -c "import torch; print(torch.__version__, 'cuda:', torch.cuda.is_available())"
+
+      - name: Restore the model cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/huggingface/hub
+          # Bump the trailing version to force a re-download.
+          key: hf-bge-small-en-v1.5-v1
+          restore-keys: hf-bge-small-en-v1.5-
+
+      # A dedicated step so a Hugging Face outage or rate limit reads as a
+      # download failure, rather than as 59 mysterious test errors.
+      - name: Download the embedding model
+        run: hf download "$MODEL_NAME"
+
+      - name: Run tests
+        env:
+          # The model is on disk by now, so the tests must not reach the
+          # network at all. This also skips the per-load revision check,
+          # which cuts the suite from ~11s to ~5s.
+          HF_HUB_OFFLINE: "1"
+        run: pytest --durations=10 --junitxml=junit.xml
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: junit-${{ matrix.python-version }}
+          path: junit.xml
+          if-no-files-found: warn
+          retention-days: 7

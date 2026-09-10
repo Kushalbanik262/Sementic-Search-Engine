@@ -1,5 +1,7 @@
 # Embedding Service
 
+[![Tests](https://github.com/Kushalbanik262/Sementic-Search-Engine/actions/workflows/tests.yml/badge.svg)](https://github.com/Kushalbanik262/Sementic-Search-Engine/actions/workflows/tests.yml)
+
 Sentence embeddings over HTTP, backed by `BAAI/bge-small-en-v1.5` (384 dims, 512 token limit).
 
 ## Layout
@@ -111,6 +113,29 @@ shares it.
 checks that the service returns well-shaped vectors; those tests check the
 vectors are *useful*. A model swap or a dropped query instruction keeps every
 other test green while quietly destroying search quality.
+
+## CI
+
+`.github/workflows/tests.yml` runs the suite on every push to `main`, every
+pull request, and on demand via **Actions → Tests → Run workflow**. Two choices
+in there are worth knowing about, because both are easy to get wrong:
+
+**Torch is installed from the CPU index before anything else.** A plain
+`pip install torch` on a Linux runner pulls ~2.5 GB of CUDA libraries that a
+runner with no GPU will never load. Installing from
+`https://download.pytorch.org/whl/cpu` first satisfies the `torch>=2.14`
+requirement, so the later `pip install -r requirements-dev.txt` leaves it alone.
+Keep that step first if you reorder anything.
+
+**The model is downloaded in its own step, then tests run offline.** The
+download is cached across runs by `actions/cache`, and the test step sets
+`HF_HUB_OFFLINE=1`. This buys three things: a Hugging Face outage shows up as a
+failed download rather than 59 confusing test errors, unauthenticated rate
+limits stop mattering, and the suite drops from ~11s to ~5s because each model
+load skips its revision check.
+
+To force a fresh model download, bump the trailing version in the cache key
+(`hf-bge-small-en-v1.5-v1` → `-v2`).
 
 ## Deployment notes
 
