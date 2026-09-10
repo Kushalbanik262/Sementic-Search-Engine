@@ -102,7 +102,9 @@ class HealthResponse(BaseModel):
     model_name: str
     dimensions: int | None = None
     max_seq_length: int | None = None
-    pending_jobs : int | None
+    # Needs a default: /health/live reports no queue depth, and in pydantic v2
+    # an `int | None` field with no default is still required.
+    pending_jobs: int | None = None
 
 
 # --- dependencies ----------------------------------------------------------

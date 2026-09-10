@@ -118,6 +118,11 @@ class EmbeddingEngine:
         model = self._require_model()
         s = self._settings
 
+        # SentenceTransformer.encode raises IndexError on an empty list, so
+        # short-circuit rather than leaking that out of a script call.
+        if not texts:
+            return EncodeResult(embeddings=[], truncated=[], took_ms=0.0)
+
         prepared = list(texts)
         if input_type == "query" and s.query_instruction:
             prepared = [s.query_instruction + text for text in prepared]

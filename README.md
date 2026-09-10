@@ -87,6 +87,31 @@ All keys in `.env.example`. The ones that matter under load:
 | `MAX_BATCH_ITEMS` | `128` | Rejects oversized requests with a 422. |
 | `ENCODE_QUEUE_TIMEOUT_S` | `30` | Waiting requests get a 503 rather than queueing forever. |
 
+## Tests
+
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
+
+59 tests, ~11s. The model loads once per session (~6s of that) and every test
+shares it.
+
+| File | Covers |
+| --- | --- |
+| `test_engine.py` | Engine in isolation: geometry, determinism, query instruction, truncation detection |
+| `test_health.py` | Root, liveness, readiness, OpenAPI schema |
+| `test_embeddings.py` | Happy paths and the response contract |
+| `test_validation.py` | Every bad input is a 422, never a 500 — plus the inclusive boundaries |
+| `test_auth.py` | API key on/off, and that health probes stay open |
+| `test_retrieval.py` | Semantic quality — the vectors are actually good for search |
+| `test_concurrency.py` | Load shedding, and that the encode slot is never leaked |
+
+`test_retrieval.py` is the unusual one and the most valuable. Everything else
+checks that the service returns well-shaped vectors; those tests check the
+vectors are *useful*. A model swap or a dropped query instruction keeps every
+other test green while quietly destroying search quality.
+
 ## Deployment notes
 
 - **Install the CPU torch build** unless you have a GPU — the default wheel pulls
