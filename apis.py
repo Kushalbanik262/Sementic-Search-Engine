@@ -34,10 +34,11 @@ from anyio import CapacityLimiter, fail_after, to_thread
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict
 
 from config import Settings, get_settings
-from main import EncodeResult, InputType, engine
+from main import EncodeResult, engine
+from schemas import EmbeddingRequest, EmbeddingResponse
 
 logger = logging.getLogger("embeddings.api")
 
@@ -50,68 +51,6 @@ _total_time_to_process_till_now = 0.0
 
 
 # --- schemas ---------------------------------------------------------------
-
-
-class EmbeddingRequest(BaseModel):
-    input: list[str] = Field(
-        ...,
-        description="One or more texts to embed. A bare string is also accepted.",
-        examples=[["How do I reset my password?"]],
-    )
-    input_type: InputType = Field(
-        default="passage",
-        description=(
-            "'passage' for documents you are indexing, 'query' for search terms. "
-            "Queries get the BGE retrieval instruction prepended."
-        ),
-    )
-    normalize: bool = Field(
-        default=True,
-        description="Return unit-length vectors so cosine similarity is a dot product.",
-    )
-
-    @field_validator("input", mode="before")
-    @classmethod
-    def _coerce_and_validate(cls, value: object) -> list[str]:
-        settings = get_settings()
-
-        if isinstance(value, str):
-            value = [value]
-        if not isinstance(value, list):
-            raise ValueError("input must be a string or a list of strings")
-        if not value:
-            raise ValueError("input must contain at least one text")
-        if len(value) > settings.max_batch_items:
-            raise ValueError(
-                f"batch of {len(value)} exceeds max_batch_items={settings.max_batch_items}"
-            )
-
-        for index, text in enumerate(value):
-            if not isinstance(text, str):
-                raise ValueError(f"input[{index}] must be a string")
-            if not text.strip():
-                raise ValueError(f"input[{index}] is empty")
-            if len(text) > settings.max_chars_per_text:
-                raise ValueError(
-                    f"input[{index}] has {len(text)} chars, "
-                    f"over max_chars_per_text={settings.max_chars_per_text}"
-                )
-        return value
-
-
-class EmbeddingResponse(BaseModel):
-    model_config = ConfigDict(protected_namespaces=())
-
-    model_name: str
-    dimensions: int
-    input_type: InputType
-    normalized: bool
-    count: int
-    truncated: list[bool] = Field(
-        description="Per-text flag: True means the text was cut at the model token limit."
-    )
-    embeddings: list[list[float]]
-    took_ms: float
 
 
 class HealthResponse(BaseModel):

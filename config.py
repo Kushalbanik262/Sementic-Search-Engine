@@ -65,6 +65,41 @@ class Settings(BaseSettings):
     cors_allow_origins: list[str] = Field(default_factory=list)
     log_level: str = "INFO"
 
+    # --- message queue ---------------------------------------------------
+    # Requests arrive on `mq_exchange_requests` with routing key "query" or
+    # "index"; each key has its own queue and its own pool of workers, so a
+    # bulk indexing backlog can never delay a search query.
+    rabbitmq_url: str = "amqp://guest:guest@localhost:5672/"
+    mq_exchange_requests: str = "embedding.requests"
+    mq_exchange_events: str = "embedding.events"
+    mq_exchange_dlx: str = "embedding.dlx"
+    mq_dead_letter_queue: str = "embedding.dead"
+    # opaque producer metadata is echoed back on the reply, so cap its size
+    mq_metadata_max_bytes: int = 16_384
+
+    # query lane: latency first. Low prefetch so a busy worker does not sit
+    # on queries another replica could serve right now.
+    query_queue: str = "embedding.query"
+    query_prefetch: int = 16
+    query_batch_max_texts: int = 32
+    query_batch_window_ms: float = 5.0
+    query_ttl_ms: int = 5_000
+    query_max_length: int = 1_000
+
+    # index lane: throughput first. Micro-batches across messages.
+    index_queue: str = "embedding.index"
+    index_results_queue: str = "indexer.results"
+    index_prefetch: int = 32
+    index_batch_max_texts: int = 256
+    index_batch_window_ms: float = 50.0
+    index_delivery_limit: int = 5
+
+    # --- worker ----------------------------------------------------------
+    # Comma separated: "query", "index" or "query,index".
+    worker_lanes: str = "index"
+    worker_id: str | None = None  # None -> hostname-pid
+    worker_shutdown_grace_s: float = 30.0
+
 
 @lru_cache
 def get_settings() -> Settings:
